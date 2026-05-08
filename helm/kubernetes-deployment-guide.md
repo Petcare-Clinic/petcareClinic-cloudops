@@ -400,7 +400,6 @@ kubectl rollout restart deploy/genai-service -n petclinic
 ## What Was Built (Kubernetes Engineer Deliverables)
 
 
-
 | Deliverable | Description |
 |---|---|
 | `helm/` | Umbrella Helm chart with 11 sub-charts |
