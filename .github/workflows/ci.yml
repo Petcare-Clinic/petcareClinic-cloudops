@@ -22,8 +22,8 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    - name: Make mvnw executable
-      run: chmod +x upstream/mvnw
+    - name: Fix mvnw line endings and make executable
+      run: dos2unix upstream/mvnw && chmod +x upstream/mvnw
 
     - name: Build with Maven
       run: |
