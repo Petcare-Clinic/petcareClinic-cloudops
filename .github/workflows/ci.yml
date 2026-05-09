@@ -2,7 +2,7 @@ name: CI / Build and Test
 
 on:
   push:
-    branches: [ Dev, main, CI/CD-Pipeline ]
+    branches: [ Dev, main, feature/cicd-Pipeline ]
   pull_request:
     branches: [ Dev, main ]
 
