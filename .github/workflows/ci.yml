@@ -23,7 +23,7 @@ jobs:
         cache: maven
 
     - name: Fix mvnw line endings and make executable
-      run: dos2unix upstream/mvnw && chmod +x upstream/mvnw
+      run: sed -i 's/\r$//' upstream/mvnw && chmod +x upstream/mvnw
 
     - name: Build with Maven
       run: |
