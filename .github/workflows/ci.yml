@@ -1,0 +1,38 @@
+name: CI / Build and Test
+
+on:
+  push:
+    branches: [ Dev, main, feature/cicd-pipeline ]
+  pull_request:
+    branches: [ Dev, main ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Fix mvnw line endings and make executable
+      run: sed -i 's/\r$//' upstream/mvnw && chmod +x upstream/mvnw
+
+    - name: Build with Maven
+      run: |
+        cd upstream
+        sh ./mvnw clean install -Dmaven.test.skip=true
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: 'upstream/**/target/*.jar'
+        retention-days: 1
