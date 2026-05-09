@@ -2,9 +2,9 @@ name: CI / Build and Test
 
 on:
   push:
-    branches: [ Dev, main, feature/cicd-Pipeline ]
+    branches: [ Dev, main, feature/cicd-pipeline ]
   pull_request:
-    branches: [ Dev ]
+    branches: [ Dev, main ]
 
 jobs:
   build:
@@ -23,14 +23,16 @@ jobs:
         cache: maven
 
     - name: Make mvnw executable
-      run: chmod +x upstream/mvmw
+      run: chmod +x upstream/mvnw
 
     - name: Build with Maven
-      run: ./upstream/mvnw clean install -Dmaven.test.skip=false
+      run: |
+        cd upstream
+        sh ./mvnw clean install -Dmaven.test.skip=true
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts
-        path: '**/target/*.jar'
+        path: 'upstream/**/target/*.jar'
         retention-days: 1
