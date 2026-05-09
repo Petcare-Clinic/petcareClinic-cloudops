@@ -4,7 +4,7 @@ on:
   push:
     branches: [ Dev, main, feature/cicd-Pipeline ]
   pull_request:
-    branches: [ Dev, main ]
+    branches: [ Dev ]
 
 jobs:
   build:
@@ -23,10 +23,10 @@ jobs:
         cache: maven
 
     - name: Make mvnw executable
-      run: chmod +x mvnw
+      run: chmod +x upstream/mvmw
 
     - name: Build with Maven
-      run: ./mvnw clean install -Dmaven.test.skip=false
+      run: ./upstream/mvnw clean install -Dmaven.test.skip=false
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
