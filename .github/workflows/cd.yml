@@ -63,7 +63,7 @@ jobs:
       run: |
         cd upstream
         ./mvnw clean install -P buildDocker \
-          -Ddocker.image.prefix=${{ secrets.ECR_REGISTRY }} \
+          -Ddocker.image.prefix=${{ secrets.ECR_REGISTRY }}/petclinic \
           -Dmaven.test.skip=true
 
     - name: Tag and push all images to ECR
