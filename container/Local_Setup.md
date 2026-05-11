@@ -7,8 +7,6 @@
 - Java 17
 - Maven Wrapper (`./mvnw`)
 
-Project repository:
-https://github.com/spring-petclinic/spring-petclinic-microservices
 
 ---
 
@@ -120,7 +118,7 @@ docker compose version
 
 ```bash
 
-cd spring-petclinic-microservices
+cd upstream/spring-petclinic-microservices
 ```
 
 ---
