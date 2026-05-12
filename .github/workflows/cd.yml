@@ -71,11 +71,11 @@ jobs:
         IMAGE_TAG=${{ steps.set-tag.outputs.image_tag }}
         for svc in config-server discovery-server customers-service vets-service visits-service genai-service api-gateway admin-server; do
           docker tag \
-            ${{ secrets.ECR_REGISTRY }}/petclinic-${svc}:latest \
-            ${{ secrets.ECR_REGISTRY }}/petclinic-${svc}:${IMAGE_TAG}
+            ${{ secrets.ECR_REGISTRY }}/petclinic/${svc}:latest \
+            ${{ secrets.ECR_REGISTRY }}/petclinic/${svc}:${IMAGE_TAG}
           docker push \
-            ${{ secrets.ECR_REGISTRY }}/petclinic-${svc}:${IMAGE_TAG}
-          echo "Pushed: petclinic-${svc}:${IMAGE_TAG}"
+            ${{ secrets.ECR_REGISTRY }}/petclinic/${svc}:${IMAGE_TAG}
+          echo "Pushed: petclinic/${svc}:${IMAGE_TAG}"
         done
 
   # ── JOB 2: Update Helm values so ArgoCD picks up the new image tag ──────
