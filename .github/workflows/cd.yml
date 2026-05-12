@@ -119,10 +119,30 @@ jobs:
     - name: Verify changes
       run: git diff helm/
 
-    - name: Pull latest before committing
-      run: git pull origin ${{ github.ref_name }} --rebase
-
     - name: Commit and push updated values
+      env:
+        IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        NAMESPACE: ${{ needs.build-and-push.outputs.namespace }}
       run: |
-        git config user.name "github-actions[bot]"
+        git config user.name  "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        if git diff --quiet helm/; then
+          echo "No changes in helm/ — nothing to commit."
+          exit 0
+        fi
+
+        git add "helm/values-${NAMESPACE}.yaml"
+        git commit -m "chore(cd): bump ${NAMESPACE} imageTag to ${IMAGE_TAG}"
+
+        # Rebase onto latest remote and push, with a small retry to survive races
+        for attempt in 1 2 3; do
+          if git pull --rebase origin "${{ github.ref_name }}" && git push origin "HEAD:${{ github.ref_name }}"; then
+            echo "Push succeeded on attempt ${attempt}."
+            exit 0
+          fi
+          echo "Attempt ${attempt} failed, retrying..."
+          sleep 3
+        done
+        echo "All push attempts failed."
+        exit 1
