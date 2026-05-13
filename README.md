@@ -5,10 +5,10 @@ GitOps-based CI/CD pipeline for deploying Spring PetClinic microservices to AWS 
 ## Quick Start
 
 1. **Configure GitHub Secrets** (AWS credentials, ArgoCD access) — [See Deployment Guide](deployment.md#step-1-configure-github-secrets)
-2. **Bootstrap ArgoCD Applications** — [See Deployment Guide](deployment.md#step-2-bootstrap-argocd-applications)
+2. **Bootstrap ArgoCD Applications** — [See Deployment Guide] (deployment.md#step-2-bootstrap-argocd-applications)
 3. **Push to Dev or main** — Workflow builds, pushes images, and deploys automatically
 
-## Documentation
+## Documentations
 
 - **[Deployment Guide](deployment.md)** — Complete setup, prerequisites, and operations
 - **[Kubernetes Deployment Guide](helm/kubernetes-deployment-guide.md)** — Manual Helm deployment for testing
