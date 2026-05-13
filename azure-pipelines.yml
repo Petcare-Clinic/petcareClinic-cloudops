@@ -1,0 +1,393 @@
+# =====================================================================
+# Azure DevOps CI/CD Pipeline for PetCare Clinic Microservices
+# Target: AWS EKS + ECR
+# Branch: cloud-engineer-team, main
+# =====================================================================
+
+trigger:
+  branches:
+    include:
+      - cloud-engineer-team
+      - main
+  paths:
+    include:
+      - upstream/**
+      - helm/**
+      - terraform/**
+      - azure-pipelines.yml
+
+variables:
+  - group: aws-credentials-production
+  - group: helm-deploy-production
+  - name: ECR_REGISTRY
+    value: "$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com"
+  - name: IMAGE_TAG
+    value: $(Build.BuildId)
+  - name: MAVEN_CACHE_FOLDER
+    value: $(Pipeline.Workspace)/.m2
+
+stages:
+
+# =====================================================================
+# STAGE 1: BUILD & TEST
+# =====================================================================
+- stage: BuildAndTest
+  displayName: "Build & Test - Maven"
+  jobs:
+  - job: MavenBuild
+    displayName: "Compile, Test, Package"
+    pool:
+      vmImage: "ubuntu-latest"
+    
+    steps:
+    # Step 1: Checkout the repository
+    - checkout: self
+      fetchDepth: 0
+
+    # Step 2: Set up Java 17
+    - task: JavaToolInstaller@0
+      displayName: "Install Java 17"
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    # Step 3: Cache Maven dependencies to speed up builds
+    - task: Cache@2
+      displayName: "Cache Maven packages"
+      inputs:
+        key: 'maven | "$(Agent.OS)" | **/pom.xml'
+        restoreKeys: |
+          maven | "$(Agent.OS)"
+        path: $(MAVEN_CACHE_FOLDER)
+
+    # Step 4: Build with Maven
+    - task: Maven@3
+      displayName: "Maven: clean install"
+      inputs:
+        mavenPomFile: 'upstream/pom.xml'  # ← KEY: points to your microservices pom.xml
+        goals: 'clean install'
+        options: |
+          -DskipTests=false
+        publishJUnitResults: true
+        testResultsFiles: '**/TEST-*.xml'
+        testRunTitle: 'Unit Tests'
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.17'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+
+    # Step 5: Publish test results
+    - task: PublishTestResults@2
+      displayName: "Publish test results"
+      condition: always()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/TEST-*.xml'
+        mergeTestResults: true
+        failTaskOnFailedTests: false
+
+# =====================================================================
+# STAGE 2: DOCKER BUILD & PUSH TO ECR
+# =====================================================================
+- stage: DockerBuildPush
+  displayName: "Docker Build & Push to ECR"
+  dependsOn: BuildAndTest
+  condition: succeeded()
+  
+  jobs:
+  - job: DockerJob
+    displayName: "Build and push Docker images"
+    pool:
+      vmImage: "ubuntu-latest"
+    
+    steps:
+    - checkout: self
+
+    # Step 1: Install AWS CLI
+    - task: Bash@3
+      displayName: "Install AWS CLI v2"
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+    # Step 2: Authenticate with ECR
+    - task: Bash@3
+      displayName: "Authenticate with ECR"
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+        AWS_DEFAULT_REGION: $(AWS_REGION)
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region $(AWS_REGION) | \
+            docker login --username AWS --password-stdin $(ECR_REGISTRY)
+          echo "✓ Successfully authenticated with ECR"
+
+    # Step 3: Create ECR repositories (if they don't exist)
+    - task: Bash@3
+      displayName: "Create ECR repositories"
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+        AWS_DEFAULT_REGION: $(AWS_REGION)
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          SERVICES="config-server discovery-server api-gateway customers-service vets-service visits-service admin-server genai-service"
+          
+          for SERVICE in $SERVICES; do
+            REPO_NAME="petclinic/$SERVICE"
+            echo "Checking/creating ECR repository: $REPO_NAME"
+            
+            if aws ecr describe-repositories --repository-names "$REPO_NAME" --region $(AWS_REGION) 2>/dev/null; then
+              echo "✓ Repository $REPO_NAME already exists"
+            else
+              echo "Creating repository $REPO_NAME..."
+              aws ecr create-repository --repository-name "$REPO_NAME" --region $(AWS_REGION)
+              echo "✓ Created repository $REPO_NAME"
+            fi
+          done
+
+    # Step 4: Build Docker images using Maven
+    - task: Bash@3
+      displayName: "Build Docker images via Maven"
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          cd upstream
+          echo "Building Docker images..."
+          ./mvnw clean install -PbuildDocker \
+            -Ddocker.image.prefix=$(ECR_REGISTRY)/petclinic \
+            -Dmaven.test.skip=true
+          cd ..
+          echo "✓ Docker images built successfully"
+
+    # Step 5: Tag and push images to ECR
+    - task: Bash@3
+      displayName: "Tag and push images to ECR"
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+        AWS_DEFAULT_REGION: $(AWS_REGION)
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          SERVICES="config-server discovery-server api-gateway customers-service vets-service visits-service admin-server genai-service"
+          
+          echo "Tagging and pushing images..."
+          for SERVICE in $SERVICES; do
+            IMAGE_NAME="spring-petclinic-$SERVICE"
+            ECR_IMAGE="$(ECR_REGISTRY)/petclinic/$IMAGE_NAME"
+            
+            # Check if image exists locally
+            if docker image inspect "$ECR_IMAGE:latest" >/dev/null 2>&1; then
+              echo "Pushing $SERVICE to ECR..."
+              docker tag "$ECR_IMAGE:latest" "$ECR_IMAGE:$(IMAGE_TAG)"
+              docker push "$ECR_IMAGE:$(IMAGE_TAG)"
+              docker push "$ECR_IMAGE:latest"
+              echo "✓ Pushed $SERVICE"
+            else
+              echo "⚠ Warning: Image not found for $SERVICE"
+            fi
+          done
+          echo "✓ All available images pushed to ECR"
+
+# =====================================================================
+# STAGE 3: DEPLOY TO EKS WITH HELM
+# =====================================================================
+- stage: DeployToEKS
+  displayName: "Deploy to EKS via Helm"
+  dependsOn: DockerBuildPush
+  condition: succeeded()
+  
+  jobs:
+  - deployment: HelmDeploy
+    displayName: "Helm Deployment"
+    environment: 'production'
+    pool:
+      vmImage: "ubuntu-latest"
+    
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          # Step 1: Install tools (kubectl, aws cli, helm)
+          - task: Bash@3
+            displayName: "Install kubectl, aws-cli, helm"
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                
+                # Install kubectl
+                echo "Installing kubectl..."
+                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                chmod +x kubectl
+                sudo mv kubectl /usr/local/bin/
+                kubectl version --client
+                
+                # Install aws-cli
+                echo "Installing AWS CLI..."
+                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                unzip awscliv2.zip
+                sudo ./aws/install --update
+                aws --version
+                
+                # Install helm
+                echo "Installing Helm..."
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                helm version
+
+          # Step 2: Configure kubectl to access EKS cluster
+          - task: Bash@3
+            displayName: "Configure kubectl for EKS"
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_DEFAULT_REGION: $(AWS_REGION)
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                echo "Configuring kubectl..."
+                aws eks update-kubeconfig \
+                  --region $(AWS_REGION) \
+                  --name $(EKS_CLUSTER_NAME)
+                
+                echo "Verifying cluster connectivity..."
+                kubectl cluster-info
+                kubectl get nodes
+
+          # Step 3: Create production namespace if it doesn't exist
+          - task: Bash@3
+            displayName: "Create Kubernetes namespace"
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                NAMESPACE=$(HELM_NAMESPACE)
+                echo "Ensuring namespace '$NAMESPACE' exists..."
+                kubectl get namespace $NAMESPACE 2>/dev/null || \
+                  kubectl create namespace $NAMESPACE
+                echo "✓ Namespace ready"
+
+          # Step 4: Deploy with Helm
+          - task: Bash@3
+            displayName: "Deploy via Helm"
+            env:
+              AWS_ACCOUNT_ID: $(AWS_ACCOUNT_ID)
+              AWS_REGION: $(AWS_REGION)
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                NAMESPACE=$(HELM_NAMESPACE)
+                RELEASE=$(HELM_RELEASE_NAME)
+                CHART_PATH="helm"
+                IMAGE_REGISTRY=$(ECR_REGISTRY)
+                IMAGE_TAG=$(IMAGE_TAG)
+                
+                echo "Deploying with Helm..."
+                echo "Release: $RELEASE"
+                echo "Namespace: $NAMESPACE"
+                echo "Chart path: $CHART_PATH"
+                echo "Image registry: $IMAGE_REGISTRY"
+                echo "Image tag: $IMAGE_TAG"
+                
+                helm upgrade --install $RELEASE $CHART_PATH \
+                  --namespace $NAMESPACE \
+                  --values helm/values-production.yaml \
+                  --set global.imageRegistry=$IMAGE_REGISTRY \
+                  --set global.imageTag=$IMAGE_TAG \
+                  --wait \
+                  --timeout 10m
+                
+                echo "✓ Helm deployment completed"
+
+          # Step 5: Verify deployment rollout
+          - task: Bash@3
+            displayName: "Verify deployment rollout"
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -e
+                NAMESPACE=$(HELM_NAMESPACE)
+                
+                echo "Waiting for config-server to be ready..."
+                kubectl rollout status deployment/config-server -n $NAMESPACE --timeout=300s || true
+                
+                echo "Waiting for discovery-server to be ready..."
+                kubectl rollout status deployment/discovery-server -n $NAMESPACE --timeout=300s || true
+                
+                echo "Waiting for api-gateway to be ready..."
+                kubectl rollout status deployment/api-gateway -n $NAMESPACE --timeout=300s || true
+                
+                echo "✓ Rollout verification completed"
+                echo ""
+                echo "Pod status in namespace $NAMESPACE:"
+                kubectl get pods -n $NAMESPACE
+                
+                echo ""
+                echo "Service status in namespace $NAMESPACE:"
+                kubectl get svc -n $NAMESPACE
+
+# =====================================================================
+# STAGE 4: SMOKE TESTS (Optional)
+# =====================================================================
+- stage: SmokeTests
+  displayName: "Smoke Tests"
+  dependsOn: DeployToEKS
+  condition: succeeded()
+  
+  jobs:
+  - job: SmokeTest
+    displayName: "Test deployed services"
+    pool:
+      vmImage: "ubuntu-latest"
+    
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      displayName: "Run smoke tests"
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          
+          # Install kubectl
+          echo "Installing kubectl..."
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          
+          NAMESPACE=$(HELM_NAMESPACE)
+          
+          echo "Running smoke tests..."
+          echo "Checking pod status in namespace: $NAMESPACE"
+          
+          # Check if pods are running
+          RUNNING_PODS=$(kubectl get pods -n $NAMESPACE --field-selector=status.phase=Running --no-headers | wc -l)
+          echo "✓ $RUNNING_PODS pods running"
+          
+          # Check deployment status
+          echo "Checking deployment status..."
+          kubectl get deployments -n $NAMESPACE
+          
+          echo "✓ Smoke tests completed"

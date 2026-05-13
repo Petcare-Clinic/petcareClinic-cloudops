@@ -1,2 +1,2 @@
-helm/charts/*.tgz
+.terraform/
 helm/charts/*.tgz
