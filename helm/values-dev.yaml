@@ -31,6 +31,6 @@ api-gateway:
 genai-service:
   replicaCount: 0
 prometheus:
-  replicaCount: 0
+  replicaCount: 1
 grafana:
-  replicaCount: 0
+  replicaCount: 1

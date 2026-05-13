@@ -35,9 +35,26 @@ GitHub Push → CI/CD Workflow → Docker Build → ECR → ArgoCD → EKS
 | visits-service | 8082 | Visit records |
 | genai-service | 8084 | AI chatbot features |
 | admin-server | 9090 | Spring Boot Admin |
-| prometheus | 9090 | Metrics collection |
-| grafana | 3000 | Metrics dashboards |
-| zipkin | 9411 | Distributed tracing |
+| **prometheus** | **9090** | **Metrics collection & storage** |
+| **grafana** | **3000** | **Metrics dashboards & visualization** |
+| **zipkin** | **9411** | **Distributed tracing** |
+
+## Observability
+
+The stack includes production-ready monitoring and tracing:
+
+- **Prometheus** — Scrapes metrics from all services at `/actuator/prometheus` every 15 seconds
+- **Grafana** — Pre-configured with Prometheus datasource and "Spring Petclinic Metrics" dashboard
+  - HTTP latency, request rates, business operation metrics
+  - Default credentials: `admin` / `petclinic`
+- **Zipkin** — Distributed tracing for microservice call chains
+
+Access via `kubectl port-forward`:
+```bash
+kubectl port-forward -n dev svc/grafana 3000:3000    # http://localhost:3000
+kubectl port-forward -n dev svc/prometheus 9090:9090 # http://localhost:9090
+kubectl port-forward -n dev svc/zipkin 9411:9411     # http://localhost:9411/zipkin/
+```
 
 ## Environments
 
