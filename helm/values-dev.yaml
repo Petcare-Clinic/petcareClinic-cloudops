@@ -1,11 +1,10 @@
 global:
   imageRegistry: "268015775379.dkr.ecr.us-east-1.amazonaws.com"
-  imageTag: "dev-10"
+  imageTag: "dev-11"
   namespace: dev
   springProfile: docker
   configServerUrl: "http://config-server:8888"
   eurekaDefaultZone: "http://discovery-server:8761/eureka/"
-
 config-server:
   image:
     repository: "petclinic/config-server"
@@ -29,7 +28,6 @@ api-gateway:
     repository: "petclinic/api-gateway"
   service:
     type: LoadBalancer
-
 genai-service:
   replicaCount: 0
 prometheus:
