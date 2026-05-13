@@ -36,16 +36,16 @@ This repository contains a **GitOps-based CI/CD pipeline** for deploying Spring 
       └────────────┬──────────────────────┘
                    │
       ┌────────────▼─────────────────────┐
-      │  ArgoCD Automatic Sync            │
-      │  • Reads new Helm values          │
-      │  • Renders & applies manifests    │
-      │  • Deploys to EKS                 │
+      │  ArgoCD Automatic Sync           │
+      │  • Reads new Helm values         │
+      │  • Renders & applies manifests   │
+      │  • Deploys to EKS                │
       └────────────┬─────────────────────┘
                    │
       ┌────────────▼─────────────────────┐
-      │  Production Environment           │
-      │  dev namespace / production ns    │
-      └───────────────────────────────────┘
+      │  Production Environment          │
+      │  dev namespace / production ns   │
+      └──────────────────────────────────┘
 ```
 
 ### Services Deployed
@@ -59,10 +59,10 @@ This repository contains a **GitOps-based CI/CD pipeline** for deploying Spring 
 | vets-service | 8083 | Business logic |
 | visits-service | 8082 | Business logic |
 | genai-service | 8084 | AI features |
-| admin-server | 9090 | Observability |
-| zipkin | 9411 | Distributed tracing |
-| prometheus | 9090 | Metrics collection |
-| grafana | 3000 | Metrics dashboard |
+| admin-server | 9090 | Spring Boot Admin |
+| **zipkin** | **9411** | **Distributed tracing** |
+| **prometheus** | **9090** | **Metrics collection** |
+| **grafana** | **3000** | **Metrics dashboard** |
 
 ---
 
@@ -248,6 +248,51 @@ on:
 
 ---
 
+## Observability Stack
+
+The deployment includes a complete monitoring and tracing stack for production observability:
+
+### Prometheus
+- **Image:** `prom/prometheus:v2.53.0` (official public image)
+- **Config:** Scrapes all Spring Boot services at `/actuator/prometheus` endpoint every 15 seconds
+- **Services monitored:**
+  - api-gateway (8080)
+  - customers-service (8081)
+  - visits-service (8082)
+  - vets-service (8083)
+- **Storage:** In-memory TSDB (data lost on pod restart; add persistent volume for production)
+
+### Grafana
+- **Image:** `grafana/grafana:11.3.0` (official public image)
+- **Default credentials:** `admin` / `petclinic` (override via `--set grafana.adminPassword=<secret>`)
+- **Datasource:** Automatically configured to connect to Prometheus at `http://prometheus:9090`
+- **Dashboard:** Pre-loaded "Spring Petclinic Metrics" dashboard with:
+  - HTTP request latency (avg/max response time)
+  - HTTP request activity (ok vs error rates)
+  - Business metrics (owners created/updated, pets created, visits recorded)
+  - SPC business histogram (stacked bar chart of operations)
+- **Anonymous access:** Enabled with Admin role (disable for production via `GF_AUTH_ANONYMOUS_ENABLED=false`)
+
+### Zipkin
+- **Image:** `openzipkin/zipkin:latest` (official public image)
+- **Purpose:** Distributed tracing for microservices
+- **Spring Boot integration:** Automatically configured if `spring.zipkin.base-url` is set
+- **Storage:** In-memory (data lost on pod restart; production should use external storage backend)
+
+### Enabling/Disabling Monitoring
+
+**By environment:**
+- **Dev:** Monitoring enabled (`replicaCount: 1` in `values-dev.yaml`)
+- **Production:** Monitoring enabled (`replicaCount: 1` in `values-production.yaml`)
+
+**To disable temporarily:**
+```bash
+# Set replicas to 0 for all monitoring services
+helm upgrade petclinic . --set prometheus.replicaCount=0 --set grafana.replicaCount=0 --set zipkin.replicaCount=0
+```
+
+---
+
 ## Monitoring & Troubleshooting
 
 ### Check Workflow Status
@@ -307,13 +352,17 @@ kubectl port-forward -n dev svc/api-gateway 8080:8080
 kubectl port-forward -n dev svc/discovery-server 8761:8761
 # http://localhost:8761
 
-# Grafana (metrics)
-kubectl port-forward -n dev svc/grafana 3000:3000
-# http://localhost:3000
+# Prometheus (metrics database)
+kubectl port-forward -n dev svc/prometheus 9090:9090
+# http://localhost:9090/graph
 
-# Zipkin (tracing)
+# Grafana (metrics dashboards)
+kubectl port-forward -n dev svc/grafana 3000:3000
+# http://localhost:3000 (admin / petclinic)
+
+# Zipkin (distributed tracing)
 kubectl port-forward -n dev svc/zipkin 9411:9411
-# http://localhost:9411
+# http://localhost:9411/zipkin/
 ```
 
 ---

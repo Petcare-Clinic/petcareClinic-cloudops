@@ -179,8 +179,8 @@ zipkin:
 prometheus:
   replicaCount: 1
   image:
-    repository: "spring-petclinic-prometheus"
-    tag: ""
+    repository: "prom/prometheus"
+    tag: "v2.53.0"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -196,9 +196,10 @@ prometheus:
 grafana:
   replicaCount: 1
   image:
-    repository: "spring-petclinic-grafana"
-    tag: ""
+    repository: "grafana/grafana"
+    tag: "11.3.0"
     pullPolicy: IfNotPresent
+  adminPassword: "petclinic"
   service:
     type: ClusterIP
     port: 3000
