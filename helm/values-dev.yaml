@@ -5,8 +5,34 @@ global:
   springProfile: docker
   configServerUrl: "http://config-server:8888"
   eurekaDefaultZone: "http://discovery-server:8761/eureka/"
+
+config-server:
+  image:
+    repository: "petclinic/config-server"
+discovery-server:
+  image:
+    repository: "petclinic/discovery-server"
+admin-server:
+  image:
+    repository: "petclinic/admin-server"
+customers-service:
+  image:
+    repository: "petclinic/customers-service"
+vets-service:
+  image:
+    repository: "petclinic/vets-service"
+visits-service:
+  image:
+    repository: "petclinic/visits-service"
 api-gateway:
+  image:
+    repository: "petclinic/api-gateway"
   service:
     type: LoadBalancer
+
 genai-service:
+  replicaCount: 0
+prometheus:
+  replicaCount: 0
+grafana:
   replicaCount: 0
