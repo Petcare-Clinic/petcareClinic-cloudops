@@ -87,3 +87,8 @@ See [Deployment Guide](deployment.md) for complete setup instructions.
 ├── terraform/               # Infrastructure setup
 └── upstream/                # Spring PetClinic source code
 ```
+
+
+----
+This part will be for our architecture drawing
+----
