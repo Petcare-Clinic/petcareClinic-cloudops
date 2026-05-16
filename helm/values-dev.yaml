@@ -29,7 +29,27 @@ api-gateway:
   service:
     type: LoadBalancer
 genai-service:
-  replicaCount: 0
+  replicaCount: 1
+  image:
+    repository: "spring-petclinic-genai-service"
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8084
+  env:
+    - name: SPRING_AI_AZURE_OPENAI_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: genai-secret
+          key: AZURE_OPENAI_ENDPOINT
+    - name: SPRING_AI_AZURE_OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: genai-secret
+          key: AZURE_OPENAI_KEY
+    - name: SPRING_AI_AZURE_OPENAI_CHAT_OPTIONS_DEPLOYMENT_NAME
+      value: "Petclinic-genai"
 prometheus:
   replicaCount: 1
 grafana:
