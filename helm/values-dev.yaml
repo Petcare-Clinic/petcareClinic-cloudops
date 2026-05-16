@@ -31,7 +31,7 @@ api-gateway:
 genai-service:
   replicaCount: 1
   image:
-    repository: "spring-petclinic-genai-service"
+    repository: "petclinic/genai-service"
     tag: ""
     pullPolicy: IfNotPresent
   service:
