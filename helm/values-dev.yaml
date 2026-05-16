@@ -49,7 +49,7 @@ genai-service:
           name: genai-secret
           key: AZURE_OPENAI_KEY
     - name: SPRING_AI_AZURE_OPENAI_CHAT_OPTIONS_DEPLOYMENT_NAME
-      value: "Petclinic-genai"
+      value: "gpt-4.1-mini"
 prometheus:
   replicaCount: 1
 grafana:
